@@ -1,0 +1,91 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+myenv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Deep Learning specific
+# Weights and models
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.keras
+*.ckpt
+*.weights
+*.onnx
+*.tflite
+*.pb
+saved_models/
+checkpoints/
+models/
+
+# Datasets and data files
+*.csv
+*.dat
+*.out
+*.npy
+*.npz
+*.TFRecord
+data/
+datasets/
+
+# Logs and TensorBoard
+logs/
+tensorboard_logs/
+runs/
+wandb/
+*.log
+
+# PyTorch Lightning
+.pl_auto_save/
+lightning_logs/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
