@@ -24,9 +24,42 @@ def make_spirals(n_samples=300, noise=0.1, random_state=None):
     
     return X, y
 
-def get_dataloaders(n_samples=3000, noise=1.4, random_state=42, batch_size=256):
-    # Generate raw data
-    X, y = make_spirals(n_samples=n_samples, noise=noise, random_state=random_state)
+def make_complex_spirals(n_samples=3000, noise=0.5, rotations=3, random_state=None):
+    """
+    Generates a much more complex dataset where the spirals wrap around each other
+    multiple times (controlled by 'rotations'), creating a highly non-linear
+    decision boundary that requires a deeper/smarter network to solve.
+    """
+    if random_state is not None:
+        np.random.seed(random_state)
+        
+    n = n_samples // 2
+    
+    # Increase the maximum angle to make the spirals wrap around more
+    theta = np.sqrt(np.random.rand(n)) * rotations * 2 * np.pi
+    
+    # Class 0
+    r_a = theta + np.pi
+    data_a = np.array([np.cos(theta) * r_a, np.sin(theta) * r_a]).T
+    data_a += np.random.randn(n, 2) * noise
+    
+    # Class 1
+    r_b = -theta - np.pi
+    data_b = np.array([np.cos(theta) * r_b, np.sin(theta) * r_b]).T
+    data_b += np.random.randn(n, 2) * noise
+    
+    X = np.vstack([data_a, data_b])
+    y = np.zeros(n_samples, dtype=int)
+    y[n:] = 1
+    
+    return X, y
+
+def get_dataloaders(n_samples=3000, noise=0.8, random_state=42, batch_size=256, use_complex=True):
+    # Generate raw data (using complex spirals by default now!)
+    if use_complex:
+        X, y = make_complex_spirals(n_samples=n_samples, noise=noise, rotations=3, random_state=random_state)
+    else:
+        X, y = make_spirals(n_samples=n_samples, noise=noise, random_state=random_state)
 
     # Convert to PyTorch tensors
     X = torch.tensor(X, dtype=torch.float32)

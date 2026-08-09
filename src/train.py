@@ -8,18 +8,21 @@ def main():
     # 1. Setup Device
     # We can use MPS on mac if available, otherwise fallback to CPU. 
     # Your notebook had device="cpu", so we'll start with that but make it flexible!
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    # device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = 'cpu'
     print(f"Using device: {device}")
 
     # 2. Get Data
     print("Loading data...")
     train_loader, test_loader, X_full, y_full = get_dataloaders(
-        n_samples=3000, noise=1.4, random_state=42, batch_size=256
+        n_samples=1000, noise=0.2, random_state=42, batch_size=128, use_complex=True
     )
 
     # 3. Setup Model
-    model = MyNeuralNet(7, [2, 16, 1])
+    model = MyNeuralNet(25, [2, 64, 1])
+    model.init_weights()
     model.to(device)
+    
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
     epochs = 2000
