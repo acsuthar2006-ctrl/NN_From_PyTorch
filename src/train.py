@@ -2,30 +2,22 @@ import torch
 import torch.nn as nn
 from data import get_dataloaders
 from model import MyNeuralNet
-from utils import evaluate, plot_decision_boundary, plot_3d_surface
+from utils import evaluate
 
 def main():
-    # 1. Setup Device
-    # We can use MPS on mac if available, otherwise fallback to CPU. 
-    # Your notebook had device="cpu", so we'll start with that but make it flexible!
-    # device = "mps" if torch.backends.mps.is_available() else "cpu"
-    device = 'cpu'
+    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    # 2. Get Data
     print("Loading data...")
-    train_loader, test_loader, X_full, y_full = get_dataloaders(
-        n_samples=1000, noise=0.2, random_state=42, batch_size=128, use_complex=True
-    )
+    train_loader, test_loader = get_dataloaders(batch_size=128)
 
-    # 3. Setup Model
-    model = MyNeuralNet(25, [2, 64, 1])
+    model = MyNeuralNet(layers=10, size_list=[784, 128, 10])
     model.init_weights()
     model.to(device)
     
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
-    epochs = 2000
+    epochs = 10
 
     # 4. Training Loop
     print(f"Starting training for {epochs} epochs...")
@@ -36,9 +28,12 @@ def main():
         for batch_X, batch_y in train_loader:
             batch_X = batch_X.to(device)
             batch_y = batch_y.to(device)
+            
+            # Flatten images for the MLP
+            batch_X_flat = batch_X.view(batch_X.size(0), -1)
 
             optimizer.zero_grad()
-            outputs = model(batch_X)
+            outputs = model(batch_X_flat)
             loss = criterion(outputs, batch_y)
             loss.backward()
             optimizer.step()
@@ -46,9 +41,8 @@ def main():
             
         train_loss /= len(train_loader)
         
-        # Print progress every 100 epochs instead of 50 to keep output clean
-        if epoch % 100 == 0:
-            print(f"Epoch {epoch:4d}/{epochs} | Loss: {train_loss:.4f}")
+        # Print progress every epoch
+        print(f"Epoch {epoch+1:2d}/{epochs} | Loss: {train_loss:.4f}")
 
     # 5. Evaluation
     print("\n--- Evaluation ---")
@@ -58,8 +52,11 @@ def main():
         for batch_X, batch_y in test_loader:
             batch_X = batch_X.to(device)
             batch_y = batch_y.to(device)
+            
+            # Flatten images for the MLP
+            batch_X_flat = batch_X.view(batch_X.size(0), -1)
 
-            outputs = model(batch_X)
+            outputs = model(batch_X_flat)
             loss = criterion(outputs, batch_y)
             test_loss += loss.item()
             
@@ -72,13 +69,9 @@ def main():
     print(f"Test Acc:  {test_acc * 100:.2f}%")
 
     # 6. Visualization
-    print("\nGenerating plots...")
-    # Convert the full tensor data back to numpy for plotting
-    X_np = X_full.numpy()
-    y_np = y_full.numpy()
-    
-    plot_decision_boundary(model, X_np, y_np, device)
-    plot_3d_surface(model, X_np, y_np, device)
+    print("\nGenerating predictions visualization...")
+    from utils import show_predictions
+    show_predictions(model, test_loader, device)
 
 if __name__ == "__main__":
     main()
