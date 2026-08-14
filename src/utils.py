@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 def evaluate(model, loader, device):
     model.eval()
@@ -13,10 +12,10 @@ def evaluate(model, loader, device):
             X_batch = X_batch.to(device)
             y_batch = y_batch.to(device)
             
-            # Flatten the image for MLP
-            X_batch_flat = X_batch.view(X_batch.size(0), -1)
+            # Model now handles 3D images directly
+            # X_batch_flat = X_batch.view(X_batch.size(0), -1)
             
-            logits = model(X_batch_flat)
+            logits = model(X_batch)
             # For multi-class, prediction is the index with the highest logit
             preds = logits.argmax(dim=1)
 
@@ -39,11 +38,11 @@ def show_predictions(model, loader, device, num_images=16):
     
     # Move to device and get predictions
     images_gpu = images.to(device)
-    # Flatten for the MLP
-    images_flat = images_gpu.view(images_gpu.size(0), -1)
+    # Model now handles 3D images directly
+    # images_flat = images_gpu.view(images_gpu.size(0), -1)
     
     with torch.no_grad():
-        logits = model(images_flat)
+        logits = model(images_gpu)
         preds = logits.argmax(dim=1).cpu()
 
     # Create a plot
@@ -53,12 +52,15 @@ def show_predictions(model, loader, device, num_images=16):
         ax = fig.add_subplot(4, 4, i+1, xticks=[], yticks=[])
         
         # Un-normalize the image for display
-        # We used mean=0.1307, std=0.3081 during data loading
-        img = images[i].squeeze().numpy()
-        img = (img * 0.3081) + 0.1307
+        # CIFAR-10 stats: mean=(0.4914, 0.4822, 0.4465), std=(0.2470, 0.2435, 0.2616)
+        img = images[i].numpy()
+        img = np.transpose(img, (1, 2, 0)) # Convert from (C, H, W) to (H, W, C)
+        mean = np.array([0.4914, 0.4822, 0.4465])
+        std = np.array([0.2470, 0.2435, 0.2616])
+        img = (img * std) + mean
         img = np.clip(img, 0, 1)
         
-        ax.imshow(img, cmap='gray')
+        ax.imshow(img)
         
         # Set title color: green if correct, red if wrong
         color = 'green' if preds[i] == labels[i] else 'red'
