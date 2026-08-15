@@ -5,8 +5,7 @@ from model import MyNeuralNet
 from utils import evaluate
 
 def main():
-    # device = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    device = 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
     print(f"Using device: {device}")
 
     print("Loading data...")
@@ -17,8 +16,15 @@ def main():
     model.to(device)
     
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    epochs = 20
+    # [NEW] Add weight_decay (L2 regularization) to AdamW to stop overfitting
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=1e-3)
+    epochs = 50
+    
+    # 1. Learning Rate Scheduler (OneCycleLR)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(train_loader), epochs=epochs)
+    
+    # 2. Automatic Mixed Precision (AMP) Scaler for fast Kaggle GPU training
+    scaler = torch.amp.GradScaler('cuda') if device == 'cuda' else None
 
     # 4. Training Loop
     print(f"Starting training for {epochs} epochs...")
@@ -34,16 +40,31 @@ def main():
             # batch_X_flat = batch_X.view(batch_X.size(0), -1)
 
             optimizer.zero_grad()
-            outputs = model(batch_X)
-            loss = criterion(outputs, batch_y)
-            loss.backward()
-            optimizer.step()
+            
+            # 3. AMP Training Step (Only runs if on CUDA/Kaggle)
+            if scaler is not None:
+                with torch.amp.autocast('cuda'):
+                    outputs = model(batch_X)
+                    loss = criterion(outputs, batch_y)
+                scaler.scale(loss).backward()  # type: ignore
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                outputs = model(batch_X)
+                loss = criterion(outputs, batch_y)
+                loss.backward()
+                optimizer.step()
+                
+            # Step the scheduler after EACH BATCH (required for OneCycleLR)
+            scheduler.step()
+            
             train_loss += loss.item() 
             
         train_loss /= len(train_loader)
         
-        # Print progress every epoch
-        print(f"Epoch {epoch+1:2d}/{epochs} | Loss: {train_loss:.4f}")
+        # Print progress and current learning rate
+        current_lr = scheduler.get_last_lr()[0]
+        print(f"Epoch {epoch+1:2d}/{epochs} | Loss: {train_loss:.4f} | LR: {current_lr:.6f}")
 
     # 5. Evaluation
     print("\n--- Evaluation ---")

@@ -1,41 +1,51 @@
 import torch
 import torch.nn as nn
 
+def conv_block(in_channels, out_channels, pool=False):
+    """A helper function to build a Conv -> BatchNorm -> ReLU block"""
+    layers = [
+        nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(inplace=True)
+    ]
+    if pool:
+        # pyrefly: ignore [bad-argument-type]
+        layers.append(nn.MaxPool2d(2))
+    return nn.Sequential(*layers)
+
 class MyNeuralNet(nn.Module):
+    """
+    ResNet9 Architecture.
+    """
     def __init__(self, num_classes=10):
         super().__init__()
-
-        # Deep CNN Feature Extractor (VGG-style)
-        self.feature_extractor = nn.Sequential(
-            # Block 1
-            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            
-            # Block 2
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+        
+        # Prep layer
+        self.prep = conv_block(3, 64)
+        
+        # Layer 1 (with Residual Block)
+        self.layer1 = conv_block(64, 128, pool=True)
+        self.res1 = nn.Sequential(
+            conv_block(128, 128),
+            conv_block(128, 128)
         )
         
-        # Global Average Pooling squashes any spatial dimension (H, W) down to 1x1.
-        # This completely removes the need to calculate hardcoded flattened sizes!
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
-
-        # Light MLP Classifier
+        # Layer 2
+        self.layer2 = conv_block(128, 256, pool=True)
+        
+        # Layer 3 (with Residual Block)
+        self.layer3 = conv_block(256, 512, pool=True)
+        self.res2 = nn.Sequential(
+            conv_block(512, 512),
+            conv_block(512, 512)
+        )
+        
+        # Classifier
         self.classifier = nn.Sequential(
-            nn.Linear(64, 128),
-            nn.ReLU(),
-            nn.Dropout(p=0.4),
-            nn.Linear(128, num_classes)
+            nn.AdaptiveMaxPool2d((1, 1)), 
+            nn.Flatten(), 
+            nn.Dropout(0.2),
+            nn.Linear(512, num_classes)
         )
         
     def init_weights(self):
@@ -46,14 +56,17 @@ class MyNeuralNet(nn.Module):
                     nn.init.zeros_(m.bias)
 
     def forward(self, x):
-        # 1. Extract features (Output shape: [batch, 64, 8, 8])
-        x = self.feature_extractor(x)
+        x = self.prep(x)
         
-        # 2. Adaptive Pool (Output shape: [batch, 64, 1, 1])
-        x = self.adaptive_pool(x)
+        x = self.layer1(x)
+        # SKIP CONNECTION: Add the input of res1 directly to its output!
+        x = self.res1(x) + x
         
-        # 3. Flatten (Output shape: [batch, 64])
-        x = torch.flatten(x, 1)
+        x = self.layer2(x)
         
-        # 4. Classify (Output shape: [batch, 10])
-        return self.classifier(x)
+        x = self.layer3(x)
+        # SKIP CONNECTION: Add the input of res2 directly to its output!
+        x = self.res2(x) + x
+        
+        x = self.classifier(x)
+        return x

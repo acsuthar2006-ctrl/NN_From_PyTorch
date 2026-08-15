@@ -62,9 +62,15 @@ def show_predictions(model, loader, device, num_images=16):
         
         ax.imshow(img)
         
+        # CIFAR-10 class names
+        classes = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
+                   'dog', 'frog', 'horse', 'ship', 'truck']
+        
         # Set title color: green if correct, red if wrong
         color = 'green' if preds[i] == labels[i] else 'red'
-        ax.set_title(f"Pred: {preds[i].item()} | True: {labels[i].item()}", color=color)
+        pred_label = classes[preds[i].item()]
+        true_label = classes[labels[i].item()]
+        ax.set_title(f"P: {pred_label}\nT: {true_label}", color=color, fontsize=10)
         
     plt.tight_layout()
     plt.show()
