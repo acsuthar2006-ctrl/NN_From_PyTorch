@@ -13,21 +13,27 @@ def main():
 
     model = MyNeuralNet(num_classes=10)
     model.init_weights()
+    
+    # Multi-GPU Support for Kaggle T4x2
+    if torch.cuda.device_count() > 1:
+        print(f"Detected {torch.cuda.device_count()} GPUs! Distributing work via DataParallel...")
+        model = nn.DataParallel(model)
+        
     model.to(device)
     
+    # Standard Loss
     criterion = nn.CrossEntropyLoss()
-    # [NEW] Add weight_decay (L2 regularization) to AdamW to stop overfitting
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=1e-3)
-    epochs = 50
     
-    # 1. Learning Rate Scheduler (OneCycleLR)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(train_loader), epochs=epochs)
+    # Lower starting learning rate for a long, stable run
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
+    epochs = 150
     
-    # 2. Automatic Mixed Precision (AMP) Scaler for fast Kaggle GPU training
+    # Cosine Annealing slowly decays the learning rate to near-zero over 150 epochs
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     scaler = torch.amp.GradScaler('cuda') if device == 'cuda' else None
 
-    # 4. Training Loop
-    print(f"Starting training for {epochs} epochs...")
+    # Training Loop
+    print(f"Starting long training for {epochs} epochs...")
     for epoch in range(epochs):
         model.train()
         train_loss = 0
@@ -35,18 +41,15 @@ def main():
         for batch_X, batch_y in train_loader:
             batch_X = batch_X.to(device)
             batch_y = batch_y.to(device)
-            
-            # Flatten images for the MLP
-            # batch_X_flat = batch_X.view(batch_X.size(0), -1)
 
             optimizer.zero_grad()
             
-            # 3. AMP Training Step (Only runs if on CUDA/Kaggle)
             if scaler is not None:
                 with torch.amp.autocast('cuda'):
                     outputs = model(batch_X)
                     loss = criterion(outputs, batch_y)
-                scaler.scale(loss).backward()  # type: ignore
+                # pyrefly: ignore [missing-attribute]
+                scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
             else:
@@ -55,18 +58,15 @@ def main():
                 loss.backward()
                 optimizer.step()
                 
-            # Step the scheduler after EACH BATCH (required for OneCycleLR)
-            scheduler.step()
-            
             train_loss += loss.item() 
             
+        # For CosineAnnealing, we step the scheduler ONCE per epoch, not per batch!
+        scheduler.step()
         train_loss /= len(train_loader)
         
-        # Print progress and current learning rate
         current_lr = scheduler.get_last_lr()[0]
-        print(f"Epoch {epoch+1:2d}/{epochs} | Loss: {train_loss:.4f} | LR: {current_lr:.6f}")
+        print(f"Epoch {epoch+1:3d}/{epochs} | Loss: {train_loss:.4f} | LR: {current_lr:.6f}")
 
-    # 5. Evaluation
     print("\n--- Evaluation ---")
     model.eval()
     test_loss = 0
@@ -74,9 +74,6 @@ def main():
         for batch_X, batch_y in test_loader:
             batch_X = batch_X.to(device)
             batch_y = batch_y.to(device)
-            
-            # Model now handles 3D images directly
-            # batch_X_flat = batch_X.view(batch_X.size(0), -1)
 
             outputs = model(batch_X)
             loss = criterion(outputs, batch_y)
@@ -90,12 +87,13 @@ def main():
     print(f"Train Acc: {train_acc * 100:.2f}%")
     print(f"Test Acc:  {test_acc * 100:.2f}%")
 
-    # 6. Save the Model
     print("\nSaving the model parameters...")
-    torch.save(model.state_dict(), "cifar10_model.pth")
+    if isinstance(model, nn.DataParallel):
+        torch.save(model.module.state_dict(), "cifar10_model.pth")
+    else:
+        torch.save(model.state_dict(), "cifar10_model.pth")
     print("Model saved to 'cifar10_model.pth'!")
 
-    # 7. Visualization
     print("\nGenerating predictions visualization...")
     from utils import show_predictions
     show_predictions(model, test_loader, device)
