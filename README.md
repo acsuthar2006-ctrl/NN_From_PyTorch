@@ -5,7 +5,7 @@ tags:
 - resnet9
 - custom-architecture
 datasets:
-- cifar10
+- 
 metrics:
 - accuracy
 model-index:
